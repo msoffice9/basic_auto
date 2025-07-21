@@ -1,0 +1,50 @@
+import asyncio
+from playwright.async_api import async_playwright, expect
+import logging
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
+today = datetime.today().strftime("%Y%m%d")
+handler = logging.FileHandler(f'{today}_test.log')
+logger.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+
+logger.addHandler(handler)
+
+class CreatorLogin:
+    def __init__(self, ID, PW):
+        self.ID = ID
+        self.PW = PW
+
+
+    async def login_creator(self, page):
+        try:
+            await page.goto("////url////")
+            await page.wait_for_load_state('load')
+            await page.wait_for_load_state('networkidle') 
+            
+            await page.locator('button.border-Text-Primary').click()
+                
+            await page.get_by_placeholder("넥슨ID (아이디 또는 이메일)").click()
+            await page.get_by_placeholder("넥슨ID (아이디 또는 이메일)").fill(self.ID)
+            await page.get_by_placeholder("비밀번호").click()
+            await page.get_by_placeholder("비밀번호").fill(self.PW)            
+            await page.get_by_role("group", name="넥슨ID 로그인").get_by_role("button").click()
+            
+            await page.wait_for_load_state('load')
+            await page.wait_for_load_state('networkidle')
+            
+            errorMsg = page.get_by_text('넥슨ID 혹은 비밀번호를 잘못 입력하셨거나 등록되지 않은 넥슨ID 입니다.')
+            if await errorMsg.is_visible():
+                logger.warning("FE 로그인 실패, Creator의 넥슨ID/PW를 확인하세요.")
+                return False
+            else: 
+                logger.debug('FE Creator 로그인 완료')
+                return True
+            
+        except Exception as e:
+            logger.error(f"{str(e)}")
+            return False
