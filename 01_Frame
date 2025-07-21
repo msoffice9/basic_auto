@@ -1,0 +1,490 @@
+import sys
+import os
+import webbrowser
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import *
+import logging
+from datetime import datetime
+
+import asyncio
+import playwright.async_api
+import re
+
+import C0_Login
+import C1_Apply
+import C2_Attend_Campaign
+
+import S0_Login 
+import S1_Regist 
+import S2_Extend 
+import S3_Unfollow 
+
+import BO0_Login 
+import BO2_Approve_Campaign 
+
+
+logger = logging.getLogger(__name__)
+
+today = datetime.today().strftime("%Y%m%d")
+handler = logging.FileHandler(f'{today}_test.log')
+logger.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+
+logger.addHandler(handler)
+
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "C:\ms-playwright"
+
+class MainWindow(QWidget):
+    
+    def __init__(self):
+        super().__init__()
+        self.MainUI()
+
+
+    # 메인
+    def MainUI(self):
+        self.setWindowTitle('CP Automaiton Testing')
+        self.setFixedWidth(500)
+        ico_path = os.path.join(os.path.dirname(__file__), 'nwcp_logo.ico')
+        self.setWindowIcon(QIcon(ico_path))
+        
+        self.layout = QVBoxLayout()
+        
+        # Creator 영역 항목 추가
+        Creator_Label = QLabel('Creator')
+        Creator_Label.setStyleSheet('font-weight: bold;')
+        self.layout.addWidget(Creator_Label)
+        self.checkBoxCreator0 = QCheckBox('로그인')
+        self.checkBoxCreator1 = QCheckBox('넥슨 크리에이터즈 가입')
+        self.checkBoxCreator2 = QCheckBox('캠페인 참여')
+        self.checkBoxCreator3 = QCheckBox('MY 스튜디오 (쿠폰) ⛔ 준비 중')
+        self.checkBoxCreator1.setEnabled(False) # default = enabled
+        self.checkBoxCreator2.setEnabled(False)
+        self.checkBoxCreator3.setEnabled(False)
+        self.layout.addWidget(self.checkBoxCreator0)
+        self.layout.addWidget(self.checkBoxCreator1)
+        self.layout.addWidget(self.checkBoxCreator2)
+        self.layout.addWidget(self.checkBoxCreator3)
+        self.layout.addItem(QSpacerItem(15, 15)) # 간격 추가
+        AllCreaotrBoxes = [self.checkBoxCreator0, self.checkBoxCreator1, 
+                              self.checkBoxCreator2, self.checkBoxCreator3]
+        
+        # Supporter 영역 항목 추가
+        SUpporter_Label = QLabel('Supporter')
+        SUpporter_Label.setStyleSheet('font-weight: bold;')
+        self.layout.addWidget(SUpporter_Label)
+        self.checkBoxSupporter0 = QCheckBox('로그인')
+        self.checkBoxSupporter1 = QCheckBox('후원 등록 (인게임 페이지)')
+        self.checkBoxSupporter2 = QCheckBox('후원 연장 (인게임 페이지)')
+        self.checkBoxSupporter3 = QCheckBox('후원 해제 (인게임 페이지)')
+        self.checkBoxSupporter1.setEnabled(False) # default = enabled
+        self.checkBoxSupporter2.setEnabled(False)
+        self.checkBoxSupporter3.setEnabled(False)
+        self.layout.addWidget(self.checkBoxSupporter0)
+        self.layout.addWidget(self.checkBoxSupporter1)
+        self.layout.addWidget(self.checkBoxSupporter2)
+        self.layout.addWidget(self.checkBoxSupporter3)
+        self.layout.addItem(QSpacerItem(15, 15)) # 간격 추가
+        AllSupporterBoxes = [self.checkBoxSupporter0, self.checkBoxSupporter1, 
+                              self.checkBoxSupporter2, self.checkBoxSupporter3]
+
+        # BackOffice 영역 항목 추가
+        BackOffice_Label = QLabel('BackOffice')
+        BackOffice_Label.setStyleSheet('font-weight: bold;')
+        self.layout.addWidget(BackOffice_Label)
+        self.checkBoxBackOffice0 = QCheckBox('로그인')
+        self.checkBoxBackOffice1 = QCheckBox('캠페인 생성 ⛔ 준비 중')
+        self.checkBoxBackOffice2 = QCheckBox('캠페인 승인')
+        self.checkBoxBackOffice1.setEnabled(False) # default = enabled
+        self.checkBoxBackOffice2.setEnabled(False)
+        self.layout.addWidget(self.checkBoxBackOffice0)
+        self.layout.addWidget(self.checkBoxBackOffice1)
+        self.layout.addWidget(self.checkBoxBackOffice2)
+        self.layout.addItem(QSpacerItem(15, 15)) # 간격 추가
+        AllBOBoxes = [self.checkBoxBackOffice0, self.checkBoxBackOffice1, 
+                              self.checkBoxBackOffice2]
+        
+        # Notice 영역 추가
+        Notice_Label = QLabel("\n 📑 Notice\n\n ✔ C드라이브에 Playwright의 브라우저 폴더인 'ms-playwright' 복사가 필요합니다. \n ✔ 모든 영역은 [로그인] 항목이 필수입니다.\n ✔ 크리에이터 가입 시 설정 채널은 '치지직(네이버)'입니다.\n ✔ [캠페인 승인]은 [캠페인 참여]가 필요합니다.\n")
+        Notice_Label.setStyleSheet('border: 0.5px solid gray;')
+        self.layout.addWidget(Notice_Label)
+        #self.layout.addWidget(QLabel("✔ 모든 영역은 '로그인' 항목이 필수입니다."))
+        #self.layout.addWidget(QLabel("✔ '캠페인 승인'은 '캠페인 참여' 테스트가 필요합니다."))
+        self.layout.addItem(QSpacerItem(15, 15)) # 간격 추가
+        
+        # Next 버튼
+        self.nextButton = QPushButton('Next')
+        # 클릭 시 연결 행동(showLoginPopu) 지정
+        self.nextButton.setFixedHeight(35)
+        self.nextButton.clicked.connect(self.showLoginPopup) 
+        self.layout.addWidget(self.nextButton)
+        
+        self.closeButton = QPushButton('Close')
+        self.closeButton.clicked.connect(self.close)
+        
+
+        # Add a grid layout for the buttons [About][Close]
+        self.buttonLayout = QGridLayout() # 그리드용 레이아웃 추가 생성
+        self.aboutButton = QPushButton('About')
+        self.aboutButton.clicked.connect(self.showAboutPopup)
+        self.buttonLayout.addWidget(self.aboutButton, 0, 0) # 그리드 레이아웃에 버튼 위젯 추가
+        self.conflButton = QPushButton('Confluence 이동')
+        self.conflButton.clicked.connect(lambda: webbrowser.open('////URL/////'))
+        self.buttonLayout.addWidget(self.conflButton, 0, 1) # 그리드 레이아웃에 버튼 위젯 추가
+        self.layout.addLayout(self.buttonLayout) # 그리드 레이아웃을 바탕 레이아웃에 추가
+        self.setLayout(self.layout)
+
+        # Connet 0 checkboxes to each update checkbox method
+        self.checkBoxCreator0.stateChanged.connect(self.updateCreatorCheckBox)
+        self.checkBoxSupporter0.stateChanged.connect(self.updateSupporterCheckBox)
+        self.checkBoxBackOffice0.stateChanged.connect(self.updateBackOfficeCheckBox)
+        
+        # Connect Creator3 to the updateBackOfficeCheckBox method
+        self.checkBoxCreator2.stateChanged.connect(self.updateBackOfficeCheckBox)
+
+        # Connect all checkboxes to the updateNextButtonState method
+        for c_box in AllCreaotrBoxes:
+            c_box.stateChanged.connect(self.updateNextButtonState)
+        for s_box in AllSupporterBoxes:
+            s_box.stateChanged.connect(self.updateNextButtonState)
+        for b_box in AllBOBoxes:
+            b_box.stateChanged.connect(self.updateNextButtonState)
+
+        # Initialize the button state
+        self.updateNextButtonState()  
+        
+
+    # 로그인 체크박스 필수 지정 - Creator
+    def updateCreatorCheckBox(self):     
+        CreatorBoxes_except0 = [self.checkBoxCreator1, self.checkBoxCreator2, 
+                        self.checkBoxCreator3]
+        
+        for c_box in CreatorBoxes_except0:   
+            if self.checkBoxCreator0.isChecked():
+                c_box.setEnabled(True)
+            else:
+                c_box.setEnabled(False)
+                c_box.setChecked(False)
+     
+     
+    # 로그인 체크박스 필수 지정 - Supporter       
+    def updateSupporterCheckBox(self):
+        SupporterBoxes_except0 = [self.checkBoxSupporter1, self.checkBoxSupporter2, 
+                             self.checkBoxSupporter3]
+        
+        for s_box in SupporterBoxes_except0:
+            if self.checkBoxSupporter0.isChecked():
+                s_box.setEnabled(True)
+            else:
+                s_box.setEnabled(False)
+                s_box.setChecked(False)
+
+    # 로그인 체크박스 필수 지정 - BackOffice   
+    def updateBackOfficeCheckBox(self):
+        if self.checkBoxBackOffice0.isChecked():
+            self.checkBoxBackOffice1.setEnabled(True)
+            if self.checkBoxCreator2.isChecked():
+                self.checkBoxBackOffice2.setEnabled(True)
+            else:
+                self.checkBoxBackOffice2.setEnabled(False)
+                self.checkBoxBackOffice2.setChecked(False)
+            
+        else:
+            self.checkBoxBackOffice1.setEnabled(False)
+            self.checkBoxBackOffice1.setChecked(False)
+            self.checkBoxBackOffice2.setEnabled(False)
+            self.checkBoxBackOffice2.setChecked(False)
+        
+        
+
+    # Next 버튼 유효성 검사
+    def updateNextButtonState(self):
+        zeroBoxes = [self.checkBoxCreator0, self.checkBoxSupporter0, self.checkBoxBackOffice0]
+        if any(zerobox.isChecked() for zerobox in zeroBoxes):
+            self.nextButton.setEnabled(True)
+        else:
+            self.nextButton.setEnabled(False)
+
+
+    # LogingPopup 클라스를 여는 mehtod
+    def showLoginPopup(self):
+        self.loginPopup = LoginPopup(self)
+        self.loginPopup.exec_()
+        
+        
+    # 메시지 박스를 여는 method
+    def showAboutPopup(self):
+
+        aboutBox = QMessageBox(self)
+        aboutBox.setWindowTitle('About')
+        aboutBox.setText("'Nexon Creators' 기본 기능 테스트 프로그램입니다.\n상세한 내용은 [confluence 이동]으로 확인하실 수 있습니다. \n\n💬 문의: 권명선")
+        aboutBox.setStandardButtons(QMessageBox.Ok)
+        
+        ico_path2 = os.path.join(os.path.dirname(__file__), 'NEXON_CREATORS_Symbol_1x.ico')
+        aboutBox.setIconPixmap(QPixmap(ico_path2))
+        aboutBox.exec_()
+
+    
+
+
+
+# 로그인 팝업 클라스
+class LoginPopup(QDialog):
+    # 부모 설정 X
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Login")
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint) #모달창에 ?(help 버튼) 제거
+        self.pageLayout = QVBoxLayout()
+        self.setLayout(self.pageLayout)
+        
+        self.creatorID = None
+        self.creatorPW = None
+        self.chzzID = None
+        self.chzzPW = None
+        self.supporterID = None
+        self.supporterPW = None
+        self.backOfficeID = None
+        self.backOfficePW = None
+        self.campaigntitle = None
+        self.creatorCode = None
+        self.serviceNumber = None
+        
+        self.updateLoginFields()
+
+        self.submitButton = QPushButton('Submit')
+        self.submitButton.clicked.connect(self.submit)
+        self.submitButton.setEnabled(False)  # Initially disable the submit button
+        self.pageLayout.addWidget(self.submitButton)
+        
+        self.closeButton = QPushButton('Close')
+        self.closeButton.clicked.connect(self.close)
+        self.pageLayout.addWidget(self.closeButton)
+    
+
+    
+    def updateLoginFields(self):
+        main_window = self.parentWidget()
+        
+        if main_window.checkBoxCreator0.isChecked():
+            self.creatorID = QLineEdit()
+            self.creatorID.setPlaceholderText('Nexon ID')
+            self.creatorPW = QLineEdit()
+            self.creatorPW.setPlaceholderText('Nexon PW')
+            self.creatorPW.setEchoMode(QLineEdit.Password)
+            CLogin_Label = QLabel('Creator Login')
+            CLogin_Label.setStyleSheet('font-weight: bold;')
+            self.pageLayout.addWidget(CLogin_Label)
+            self.pageLayout.addWidget(self.creatorID)
+            self.pageLayout.addWidget(self.creatorPW)
+            self.pageLayout.addItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
+            self.creatorID.textChanged.connect(self.updateSubmitButtonState)
+            self.creatorPW.textChanged.connect(self.updateSubmitButtonState)
+            
+        if main_window.checkBoxCreator1.isChecked():
+            self.chzzID = QLineEdit()
+            self.chzzID.setPlaceholderText('Naver ID')
+            self.chzzPW = QLineEdit()
+            self.chzzPW.setPlaceholderText('Naver PW')
+            self.chzzPW.setEchoMode(QLineEdit.Password)
+            NLogin_Label = QLabel('Naver(Chzz) Login')
+            NLogin_Label.setStyleSheet('font-weight: bold;')
+            self.pageLayout.addWidget(NLogin_Label)
+            self.pageLayout.addWidget(self.chzzID)
+            self.pageLayout.addWidget(self.chzzPW)
+            self.pageLayout.addItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
+            self.chzzID.textChanged.connect(self.updateSubmitButtonState)
+            self.chzzPW.textChanged.connect(self.updateSubmitButtonState) 
+                    
+          
+        if main_window.checkBoxSupporter0.isChecked():
+            self.supporterID = QLineEdit()
+            self.supporterID.setPlaceholderText('Nexon ID')
+            self.supporterPW = QLineEdit()
+            self.supporterPW.setPlaceholderText('Nexon PW')
+            self.supporterPW.setEchoMode(QLineEdit.Password)
+            SLogin_Label = QLabel('Supporter Login')
+            SLogin_Label.setStyleSheet('font-weight: bold;')
+            self.pageLayout.addWidget(SLogin_Label)
+            self.pageLayout.addWidget(self.supporterID)
+            self.pageLayout.addWidget(self.supporterPW)
+            self.pageLayout.addItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
+            self.supporterID.textChanged.connect(self.updateSubmitButtonState)
+            self.supporterPW.textChanged.connect(self.updateSubmitButtonState)
+
+      
+        if main_window.checkBoxBackOffice0.isChecked():
+            self.backOfficeID = QLineEdit()
+            self.backOfficeID.setPlaceholderText('SSO ID')
+            self.backOfficePW = QLineEdit()
+            self.backOfficePW.setPlaceholderText('SSO PW')
+            self.backOfficePW.setEchoMode(QLineEdit.Password)
+            BLogin_Label = QLabel('BackOffice Login')
+            BLogin_Label.setStyleSheet('font-weight: bold;')
+            self.pageLayout.addWidget(BLogin_Label)
+            self.pageLayout.addWidget(self.backOfficeID)
+            self.pageLayout.addWidget(self.backOfficePW)
+            self.pageLayout.addItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
+            self.backOfficeID.textChanged.connect(self.updateSubmitButtonState)
+            self.backOfficePW.textChanged.connect(self.updateSubmitButtonState)
+
+
+        if main_window.checkBoxCreator2.isChecked() or main_window.checkBoxSupporter1.isChecked() or main_window.checkBoxSupporter2.isChecked() or main_window.checkBoxSupporter3.isChecked():
+            Other_Label = QLabel('Other Settings')
+            Other_Label.setStyleSheet('font-weight: bold;')
+            self.pageLayout.addWidget(Other_Label)
+            
+            if main_window.checkBoxCreator2.isChecked():
+                self.campaigntitle = QLineEdit()
+                self.campaigntitle.setPlaceholderText('Campaign Title')
+                self.pageLayout.addWidget(self.campaigntitle)
+                self.campaigntitle.textChanged.connect(self.updateSubmitButtonState)
+
+            if main_window.checkBoxSupporter2.isChecked() or main_window.checkBoxSupporter3.isChecked():
+                if main_window.checkBoxSupporter1.isChecked():
+                    self.serviceNumber = QLineEdit()
+                    self.serviceNumber.setPlaceholderText('Service Number')
+                    self.creatorCode = QLineEdit()
+                    self.creatorCode.setPlaceholderText('Creator Code')
+                    self.pageLayout.addWidget(self.serviceNumber)
+                    self.pageLayout.addWidget(self.creatorCode)
+                    self.serviceNumber.textChanged.connect(self.updateSubmitButtonState)
+                    self.creatorCode.textChanged.connect(self.updateSubmitButtonState)
+                else:
+                    self.serviceNumber = QLineEdit()
+                    self.serviceNumber.setPlaceholderText('Service Number')
+                    self.pageLayout.addWidget(self.serviceNumber)
+                    self.serviceNumber.textChanged.connect(self.updateSubmitButtonState)
+                
+            self.pageLayout.addItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+
+    
+    
+    def updateSubmitButtonState(self):
+        creator_filled = (not self.creatorID or self.creatorID.text()) and (not self.creatorPW or self.creatorPW.text())
+        supporter_filled = (not self.supporterID or self.supporterID.text()) and (not self.supporterPW or self.supporterPW.text())
+        backoffice_filled = (not self.backOfficeID or self.backOfficeID.text()) and (not self.backOfficePW or self.backOfficePW.text())
+        other_filled = (not self.campaigntitle or self.campaigntitle.text()) and (not self.serviceNumber or self.serviceNumber.text()) and (not self.creatorCode or self.creatorCode.text())
+        chzz_filled = (not self.chzzID or self.chzzID.text()) and (not self.chzzPW or self.chzzPW.text())
+        
+        if creator_filled and supporter_filled and backoffice_filled and other_filled and chzz_filled:
+            self.submitButton.setEnabled(True)
+        else:
+            self.submitButton.setEnabled(False)
+
+
+    
+    # submit 버튼 클릭 시, 상태에 따른 모듈 실행
+    def submit(self):
+        main_window = self.parentWidget()
+        
+        async def task1():
+            async with playwright.async_api.async_playwright() as p:
+                browser = await p.chromium.launch(headless=False, args=["--start-maximized"])
+                context = await browser.new_context()
+                page = await context.new_page()
+                page.set_default_timeout(10000)
+                await page.set_viewport_size({"width": 1920, "height": 1080})
+            
+                if main_window.checkBoxCreator0.isChecked():
+                    user_creatorID = self.creatorID.text()
+                    user_creatorPW = self.creatorPW.text()
+                    Creator0 = C0_Login.CreatorLogin(user_creatorID, user_creatorPW)
+                    creator_login_success = await Creator0.login_creator(page)
+                
+                if creator_login_success:
+                    if main_window.checkBoxCreator1.isChecked():
+                        naverID = self.chzzID.text()
+                        naverPW = self.chzzPW.text()
+                        Creator1 = C1_Apply.Apply(naverID, naverPW)
+                        await Creator1.close_banner(page)
+                        await Creator1.apply(page)
+                        await Creator1.cannel_info(page,context)
+        
+        
+                    if main_window.checkBoxCreator2.isChecked():
+                        user_campaigntitle = self.campaigntitle.text()
+                        now = datetime.now().strftime("%Y%m%d_%H%M")
+                        campaignURL = 'https://'+ now
+                        Creator2 = C2_Attend_Campaign.AttendCampaign(user_campaigntitle, campaignURL)
+                        await Creator2.find(page)
+                        campaign_attend_success = await Creator2.attend(page)
+
+
+                    if main_window.checkBoxCreator3.isChecked():
+                        print("=== 'MY 스튜디오 - 쿠폰 (Creator)'은 준비 중입니다===")
+                
+                
+                if main_window.checkBoxBackOffice0.isChecked():
+                    SSOID = self.backOfficeID.text()
+                    SSOPW = self.backOfficePW.text()
+                    BO1 = BO0_Login.BOLogin(SSOID, SSOPW)
+                    bo_login_success = await BO1.login_BO(page)
+    
+    
+                if bo_login_success:
+                    if  main_window.checkBoxBackOffice1.isChecked():
+                        print("==='캠페인 생성 (BackOffice)'은 준비 중입니다.===")
+                
+                    if main_window.checkBoxBackOffice2.isChecked() and campaign_attend_success:
+                        BO2 = BO2_Approve_Campaign.ApproveCampaign(user_campaigntitle, campaignURL)
+                        await BO2.find_campaign(page)
+                        await BO2.find_content(page)
+                        await BO2.approve(page)
+                        
+                await browser.close()
+        
+        
+        async def task2():
+            async with playwright.async_api.async_playwright() as p:
+                browser = await p.chromium.launch(headless=False, args=["--start-maximized"])
+                context = await browser.new_context()
+                page = await context.new_page()
+                page.set_default_timeout(10000)
+                await page.set_viewport_size({"width": 1920, "height": 1080})
+            
+                if main_window.checkBoxSupporter0.isChecked():
+                    user_supporterID = self.supporterID.text()
+                    user_SupporterPW = self.supporterPW.text()
+                    Supporter1 = S0_Login.SupporterLogin(user_supporterID, user_SupporterPW)
+                    supporter_login_success = await Supporter1.login_supporter(page)
+                    
+                if supporter_login_success:
+                    if main_window.checkBoxSupporter1.isChecked():
+                        input_serviceNumber = self.serviceNumber.text()
+                        input_creatorCode = self.creatorCode.text()
+                        Supporter2 = S1_Regist.RegistCreator(input_serviceNumber, input_creatorCode)
+                        await Supporter2.Regist(page)
+                        
+                    if main_window.checkBoxSupporter2.isChecked():
+                        input_serviceNumber = self.serviceNumber.text()
+                        Supporter3 = S2_Extend.Extend(input_serviceNumber)
+                        await Supporter3.extend(page)
+                    
+                    if main_window.checkBoxSupporter3.isChecked():
+                        input_serviceNumber = self.serviceNumber.text()
+                        Supporter4 = S3_Unfollow.Unfollow(input_serviceNumber)
+                        await Supporter4.unfollow(page)
+                    
+                await browser.close()
+                
+        
+        async def main():
+            tasks = [task1(), task2()]
+            await asyncio.gather(*tasks)
+            
+        asyncio.run(main())
+        logger.info('I have finished all tests! Please check the log.')
+        
+        
+
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec_())
